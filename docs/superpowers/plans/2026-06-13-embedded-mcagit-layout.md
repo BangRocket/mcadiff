@@ -30,6 +30,7 @@ Order: repo primitives (Task 1) → safety (Task 2) → CLI init (Task 3) → CL
 ## Task 1: Repository layout primitives
 
 **Files:**
+
 - Modify: `crates/repo/src/repository.rs` (`is_repository` ~40-43, `init` ~45-54, `open` ~56-64, `discover` ~66-78; add `init_embedded`)
 
 - [ ] **Step 1: Write failing tests**
@@ -217,6 +218,7 @@ git commit -m "feat(repo): embedded .mcagit/ layout — init_embedded + embedded
 ## Task 2: Protect `.mcagit/` from prune (hard requirement)
 
 **Files:**
+
 - Modify: `crates/repo/src/checkout.rs` (`checkout` prune call ~92-94, `prune_extra` ~125-147)
 
 - [ ] **Step 1: Write the failing safety test**
@@ -367,6 +369,7 @@ git commit -m "fix(repo): checkout prune must never delete the embedded .mcagit/
 ## Task 3: CLI `init` — embedded default + `--bare`
 
 **Files:**
+
 - Modify: `crates/cli/src/main.rs` (`Init` enum variant ~28-32, `Cmd::Init` handler ~366-378)
 - Modify: `crates/cli/tests/cli.rs`
 
@@ -522,6 +525,7 @@ git commit -m "feat(cli): init defaults to embedded .mcagit/ (--bare/--worktree 
 ## Task 4: `clone` — embedded default + auto-checkout
 
 **Files:**
+
 - Modify: `crates/repo/src/transfer.rs` (`clone_local` ~65-86)
 - Modify: `crates/repo/src/remote.rs` (`clone_partial` ~775-804, `clone_depth` ~810-848)
 - Modify: `crates/cli/src/main.rs` (`Clone` enum ~199-210, `Cmd::Clone` handler ~1106-1128; add a `checkout_after_clone` helper)
@@ -756,13 +760,14 @@ git commit -m "feat(clone): embedded .mcagit/ default + auto-checkout (--bare/--
 ## Task 5: Docs + full-suite + e2e
 
 **Files:**
+
 - Modify: `README.md`, `CLAUDE.md`
 
 - [ ] **Step 1: Update `CLAUDE.md`**
 
 In `CLAUDE.md`, update the description of the repo model. Find the sentence in the Architecture section stating the repository is "bare and external" (it currently reads roughly: "`Repository` is **bare and external** to the world; the bound worktree is stored in the repo `config`"). Replace it with text conveying:
 
-```
+```text
 `Repository` supports two layouts: **embedded** (`<world>/.mcagit/` holds the
 metadata, worktree = the containing folder — the `init`/`clone` default) and
 **bare** (metadata directly in the repo dir, worktree external via `config` or
@@ -778,7 +783,7 @@ Also in the "CLI shape" subcommand list, update `init` to note the embedded defa
 
 In `README.md`, in the getting-started / usage section, document the embedded default. Add (adapting to the README's existing voice/format):
 
-```
+```text
 - `mcagit init [<dir>]` — create a repo embedded as `<dir>/.mcagit/`, with
   `<dir>` (default: the current directory) as the worktree (git-style). Run
   `mcagit` commands from anywhere inside `<dir>` — they discover `.mcagit/`.
@@ -833,6 +838,7 @@ echo "embedded clone OK"
 rm -rf "$TMP"
 echo "e2e OK"
 ```
+
 Report the output (must end with `e2e OK`). Adapt the `cp` source if `ls compare-worlds/` shows a different sample-world name.
 
 - [ ] **Step 5: Confirm the repo is clean (no sample-world mutation)**
@@ -852,6 +858,7 @@ git commit -m "docs: document the embedded .mcagit/ layout (init/clone defaults,
 ## Self-Review (completed during planning)
 
 **Spec coverage** — every spec section maps to a task:
+
 - §1 detection & `dir()` → Task 1 (`is_flat_repo`, embedded-aware `is_repository`/`open`/`discover`).
 - §2 `init` embedded default + bare via flag + idempotent re-init → Task 1 (`init_embedded`) + Task 3 (CLI flags/handler).
 - §3 `clone` embedded + auto-checkout (+ partial checks out nothing) → Task 4.

@@ -39,10 +39,11 @@ cargo run -p mcagit -- <args>                # run the CLI
 leading `-C <repo>`). Exit codes follow git: `0` = identical/clean, `1` = differences/conflicts,
 `2` = error. `commit` prints the new commit hash to stdout (scriptable). Subcommands:
 `init [<dir>] [--bare|--worktree <path>]` (`<dir>` defaults to `.`; default layout: embedded
-`<dir>/.mcagit/`; `--bare` = no worktree; `--worktree` = bare layout in `<dir>`, external world) `· commit [-S] · checkout ·
-status · log · diff [--json] · extract · apply [--reverse] · verify · branch · merge · fsck ·
-gc · revert · cherry-pick · rebase · stash [drop] · reflog · bisect · rev-parse · cat-file ·
-ls-tree · tag [-a/-s/-m/-v/-f/-n] · verify-commit · reset [--hard] · restore · clean ·
+`<dir>/.mcagit/`; `--bare` = no worktree; `--worktree` = bare layout in `<dir>`, external world) `· add ·
+commit [-S|-a] · checkout · status · log · diff [--json] · extract · apply [--reverse] · verify · branch ·
+merge · fsck · gc · revert · cherry-pick · rebase · stash [drop] · reflog · bisect · rev-parse · cat-file ·
+ls-tree · tag [-a/-s/-m/-v/-f/-n] · verify-commit · reset [--soft|--mixed|--hard] ·
+restore [--staged|--source <rev>] · clean ·
 clone [--bare|--worktree <path>]` (default: embedded `.mcagit/` + auto-checkout HEAD; `--bare`/
 `--worktree` opt out; `--filter blob:none` clones skeleton only, no checkout) `· push · pull ·
 fetch · ls-remote · remote · verify-remote [--deep] · serve · serve-stdio · config · players ·
@@ -121,6 +122,11 @@ patch → cli`.
   Diff-only normalizations stay out of the canonical/storage path.
 - **Lossless type-tagged JSON.** longs beyond 2^53 and float/double NaN/Inf are string-encoded
   and must survive round-trips — never encode them as JSON numbers.
+- **The staging index is `<repo>/index`, a full materialized `Manifest`.** A *missing* file
+  means "index ≡ HEAD". `add` stages pathspec-scoped worktree changes into it; bare `commit`
+  commits it (`-a`/`commit.autoStageAll` snapshot the whole worktree); HEAD-moving /
+  worktree-rewriting ops clear it; it is a gc/fsck reachability root so staged-but-uncommitted
+  objects survive gc.
 - **Never mutate in place.** `diff`/`extract`/`status`/`verify` never modify a world. `apply`
   only writes a fresh output dir. Only `checkout`/`reset --hard`/`merge`/`rebase`/`clean`/
   `stash` touch the bound worktree.

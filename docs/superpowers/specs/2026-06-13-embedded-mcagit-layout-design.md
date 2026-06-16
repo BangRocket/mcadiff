@@ -45,13 +45,14 @@ The guiding rule: **`Repository::dir()` keeps meaning "the directory that direct
 
 New low-level constructor, keeping `Repository::init` unchanged:
 
-```
+```rust
 Repository::init(dir)            // UNCHANGED — flat layout in `dir`, dir()=dir (bare). All existing callers keep working.
 Repository::init_embedded(folder) -> Result<Repository>
     // create `folder` if needed; flat-init `folder/.mcagit`; config worktree = folder; return repo (dir()=folder/.mcagit)
 ```
 
 CLI `mcagit init [DIR] [--worktree <path>] [--bare]` (DIR defaults to `.`):
+
 - **default** (no flags): `init_embedded(DIR)` → `DIR/.mcagit/`, worktree = DIR.
 - `--worktree <path>`: `init(DIR)` (flat) + `set_worktree(path)`. Today's external behavior, preserved.
 - `--bare`: `init(DIR)` (flat), no worktree.
@@ -61,6 +62,7 @@ CLI `mcagit init [DIR] [--worktree <path>] [--bare]` (DIR defaults to `.`):
 ### 3. `clone` — embedded by default + auto-checkout (CLI + `remote.rs`/`transfer.rs`)
 
 `mcagit clone <src> <dst> [--bare] [--worktree <path>] [--depth N] [--filter blob:none]`:
+
 - **default:** build the embedded layout at `dst/.mcagit` (worktree = dst), copy objects + refs as today, then **check out HEAD into `dst`** (materialize the world). After clone, `dst` is a usable world with `dst/.mcagit` inside it.
 - `--bare`: today's flat dest, no worktree, no checkout.
 - `--worktree <path>`: flat dest, external worktree bound to `path` (no auto-checkout of `dst`; user checks out into `path` if desired) — preserves the current power-user form.
@@ -72,7 +74,7 @@ Implementation: the clone entry points (`clone_local`, `clone_partial`, `clone_d
 
 `prune_extra(out_dir, manifest)` must not delete the repo's own directory when it lives inside `out_dir`. Change the signature to take the repo dir to exclude:
 
-```
+```rust
 prune_extra(out_dir, manifest, repo_dir: Option<&Path>)
     // skip any walked path that is under a canonicalized `repo_dir`
 ```
