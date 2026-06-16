@@ -33,6 +33,7 @@ Work is ordered so each task compiles and tests green on its own: repo-crate pri
 ## Task 1: `pathspec` module
 
 **Files:**
+
 - Create: `crates/repo/src/pathspec.rs`
 - Modify: `crates/repo/src/lib.rs` (add `pub mod pathspec;`)
 
@@ -178,6 +179,7 @@ git commit -m "feat(repo): pathspec matching for staging (add)"
 ## Task 2: `index` module — read/write/clear/effective
 
 **Files:**
+
 - Create: `crates/repo/src/index.rs`
 - Modify: `crates/repo/src/lib.rs` (add `pub mod index;`)
 
@@ -316,6 +318,7 @@ git commit -m "feat(repo): persistent staging index (read/write/clear/effective)
 `build` currently always walks the whole worktree. Thread an `accept` predicate through it so a subset can be snapshotted, and expose `snapshot_scoped`.
 
 **Files:**
+
 - Modify: `crates/repo/src/snapshot.rs`
 
 - [ ] **Step 1: Write a failing test for `snapshot_scoped`**
@@ -489,6 +492,7 @@ git commit -m "feat(repo): scoped snapshot (path-filtered build) for staging"
 ## Task 4: `index::add_paths` — staging logic
 
 **Files:**
+
 - Modify: `crates/repo/src/index.rs`
 
 - [ ] **Step 1: Write failing tests for `add_paths`**
@@ -692,6 +696,7 @@ git commit -m "feat(repo): index::add_paths — stage pathspec-scoped worktree c
 ## Task 5: three-way `status`
 
 **Files:**
+
 - Modify: `crates/repo/src/status.rs`
 - Modify: `crates/repo/src/lib.rs` (export `status_full`, `StatusReport`)
 
@@ -814,6 +819,7 @@ git commit -m "feat(repo): three-way status_full (staged/unstaged/untracked)"
 ## Task 6: index as a gc/fsck reachability root
 
 **Files:**
+
 - Modify: `crates/repo/src/gc.rs`
 - Modify: `crates/repo/src/fsck.rs`
 
@@ -941,6 +947,7 @@ git commit -m "fix(repo): make the staging index a gc/fsck reachability root"
 ## Task 7: CLI `add` command
 
 **Files:**
+
 - Modify: `crates/cli/src/main.rs`
 - Modify: `crates/cli/tests/cli.rs`
 
@@ -1051,6 +1058,7 @@ git commit -m "feat(cli): add command — stage worktree paths into the index"
 ## Task 8: `commit` — index-based + guardrail + `-a` + autoStageAll
 
 **Files:**
+
 - Modify: `crates/cli/src/main.rs`
 - Modify: `crates/cli/tests/cli.rs`
 
@@ -1289,6 +1297,7 @@ git commit -m "feat(cli): git-faithful commit — index by default, -a for whole
 ## Task 9: three-way `status` output
 
 **Files:**
+
 - Modify: `crates/cli/src/main.rs`
 
 - [ ] **Step 1: Replace the `Status` handler**
@@ -1356,6 +1365,7 @@ git commit -m "feat(cli): three-way status output (staged/unstaged/untracked)"
 ## Task 10: `reset` clears index, `restore --staged`, `clean` is index-aware
 
 **Files:**
+
 - Modify: `crates/cli/src/main.rs`
 - Modify: `crates/cli/tests/cli.rs`
 
@@ -1562,6 +1572,7 @@ git commit -m "feat(cli): reset clears index; restore --staged unstages; clean i
 ## Task 11: docs + full-suite + e2e on sample worlds
 
 **Files:**
+
 - Modify: `README.md`
 - Modify: `CLAUDE.md`
 - Modify: `crates/cli/src/main.rs` (the stale `Reset` doc-comment)
@@ -1587,13 +1598,13 @@ with:
 
 In `CLAUDE.md`, in the "CLI shape" subcommand list, add `add` near `commit` and update the `reset`/`restore` notes. Replace the subcommand sentence fragment `init · commit [-S] · checkout · status` with `init · add · commit [-S|-a] · checkout · status`, and replace the `reset [--hard] · restore` fragment with:
 
-```
+```text
 reset [--hard|--soft] · restore [--staged|--source <rev>] · clean
 ```
 
 Then add this bullet to the "Invariants worth preserving" list:
 
-```
+```text
 - **The staging index is `<repo>/index`, a full materialized `Manifest`.** A
   *missing* file means "index ≡ HEAD". `add` stages pathspec-scoped worktree
   changes into it; bare `commit` commits it (`-a`/`commit.autoStageAll` snapshot
@@ -1605,7 +1616,7 @@ Then add this bullet to the "Invariants worth preserving" list:
 
 In `README.md`, find the command/usage section and add `add` with a short example, and note the index in the commit description. Add (placing it near the existing `commit` documentation, matching the surrounding format):
 
-```
+```text
 - `mcagit add <pathspec>...` — stage worktree paths (files, dirs, or `*`/`?`
   globs, relative to the worktree root; `-A`/`.` for everything) into the index.
 - `mcagit commit -m "<msg>"` — commit the staging index. `commit -a` snapshots
@@ -1667,6 +1678,7 @@ git commit -m "docs: document the staging index (add/commit/status/reset/restore
 Spec §8: any HEAD-moving / worktree-rewriting op ends with a clean index. `revert`, `cherry-pick`, and `rebase` all go through the `advance()` helper; `merge` and `stash` have their own arms.
 
 **Files:**
+
 - Modify: `crates/cli/src/main.rs`
 
 - [ ] **Step 1: Write a failing test**
@@ -1763,6 +1775,7 @@ git commit -m "feat(cli): clear the staging index after merge/replay/stash"
 ## Self-Review (completed during planning)
 
 **Spec coverage** — every spec section maps to a task:
+
 - §1 index module + lifecycle → Task 2 (read/write/clear/effective); clearing on commit → Task 8; on reset → Task 10.
 - §2 `add` (file/dir/glob, deletions, worktree-relative, no-match error) → Tasks 1 (pathspec) + 4 (add_paths) + 7 (CLI).
 - §3 snapshot refactor (path filter, one walk) → Task 3.

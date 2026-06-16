@@ -75,6 +75,7 @@ CLI: `mcagit add <pathspec>...` with `-A/--all` (and `add .`) for the whole
 worktree.
 
 Semantics:
+
 - Pathspecs resolve **relative to the bound worktree root** (mcagit is
   bare/external; this avoids cwd ambiguity). A pathspec may name a file, a
   directory (recursive), or a glob.
@@ -122,6 +123,7 @@ subset can be snapshotted and merged:
 ### 5. `status` (changed → three-way)
 
 Reuse `flatten`/`diff` from `status.rs`:
+
 - **Changes staged for commit:** `diff(HEAD.tree, index::effective)`.
 - **Changes not staged for commit:** tracked paths (in the index) that differ
   between `index::effective` and `hash_only(worktree)` → modified/deleted.
