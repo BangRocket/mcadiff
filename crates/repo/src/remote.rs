@@ -179,11 +179,17 @@ impl Transport for HttpTransport {
             return Ok(Vec::new());
         }
         let url = format!("{}/have", self.base);
+        // The missing-list for a large world's first push is the whole id set
+        // (the empty remote is missing everything), well past ureq's 10 MiB
+        // default read cap. Raise it like get_pack does — the response can't
+        // exceed the ids we just sent, so MAX_PACK_TOTAL is a safe bound.
         let missing: Vec<String> = self
             .bearer(ureq::post(&url))
             .send_json(ids)
             .map_err(http_err)?
             .body_mut()
+            .with_config()
+            .limit(crate::wirepack::MAX_PACK_TOTAL)
             .read_json()
             .map_err(http_err)?;
         Ok(missing)
@@ -1048,6 +1054,38 @@ mod tests {
         fn finish(&self) -> Result<()> {
             self.0.finish()
         }
+    }
+
+    /// A first push of a large world makes the server's `/have` response — every
+    /// object id, since the remote is empty — exceed ureq's 10 MiB default read
+    /// cap. `missing()` must raise the cap like `get_pack()` does, or the push
+    /// dies with "the response body is larger than request limit: 10485760".
+    #[test]
+    fn missing_reads_a_have_response_over_10_mib() {
+        // A throwaway server that answers any request with a JSON id array
+        // larger than ureq's 10 MiB default body limit (~13 MiB here).
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let port = server.server_addr().to_ip().unwrap().port();
+        let ids: Vec<String> = (0..200_000u32).map(|i| format!("{i:064x}")).collect();
+        let body = serde_json::to_string(&ids).unwrap();
+        assert!(
+            body.len() > 10 * 1024 * 1024,
+            "test body must exceed 10 MiB"
+        );
+        let want = ids.len();
+        let handle = std::thread::spawn(move || {
+            if let Ok(req) = server.recv() {
+                let _ = req.respond(tiny_http::Response::from_string(body));
+            }
+        });
+
+        let t = HttpTransport::new(&format!("http://127.0.0.1:{port}"));
+        // a non-empty id list so missing() actually performs the /have request
+        let got = t
+            .missing(&["seed".to_string()])
+            .expect("missing() must read a >10 MiB /have response");
+        assert_eq!(got.len(), want);
+        handle.join().unwrap();
     }
 
     #[test]
