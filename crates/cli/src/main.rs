@@ -555,11 +555,38 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             if specs.is_empty() {
                 bail!("nothing specified — give a pathspec or use -A");
             }
-            let n = mca_repo::index::add_paths(&repo, &world, &specs)?;
-            if n > 0 {
-                eprintln!("staged {n} path(s)");
+            // A sign of life while chunks are decoded (TTY only, like `commit`).
+            let changes = if std::io::stderr().is_terminal() {
+                let c = mca_repo::index::add_paths(
+                    &repo,
+                    &world,
+                    &specs,
+                    Some(&|done, total| eprint!("\radd: scanning {done}/{total} files")),
+                )?;
+                eprint!("\r\x1b[K");
+                c
             } else {
+                mca_repo::index::add_paths(&repo, &world, &specs, None)?
+            };
+            if changes.is_empty() {
                 eprintln!("nothing to stage — already up to date");
+            } else {
+                // What was staged: a per-path A/M/D list, then a summary line.
+                for c in &changes {
+                    eprintln!("  {} {}", change_tag(&c.kind), c.path);
+                }
+                let (mut added, mut modified, mut deleted) = (0usize, 0usize, 0usize);
+                for c in &changes {
+                    match c.kind {
+                        ChangeKind::Added => added += 1,
+                        ChangeKind::Modified => modified += 1,
+                        ChangeKind::Removed => deleted += 1,
+                    }
+                }
+                eprintln!(
+                    "staged {} path(s): {added} added, {modified} modified, {deleted} deleted",
+                    changes.len()
+                );
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -638,23 +665,18 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 eprintln!("nothing to commit, working tree clean");
                 return Ok(ExitCode::SUCCESS);
             }
-            let tag = |k: &ChangeKind| match k {
-                ChangeKind::Added => "A",
-                ChangeKind::Modified => "M",
-                ChangeKind::Removed => "D",
-            };
             // Porcelain-style listing goes to stdout (scriptable); the clean-tree
             // note above is a stderr message.
             if !r.staged.is_empty() {
                 println!("Changes staged for commit:");
                 for c in &r.staged {
-                    println!("  {} {}", tag(&c.kind), c.path);
+                    println!("  {} {}", change_tag(&c.kind), c.path);
                 }
             }
             if !r.unstaged.is_empty() {
                 println!("Changes not staged for commit:");
                 for c in &r.unstaged {
-                    println!("  {} {}", tag(&c.kind), c.path);
+                    println!("  {} {}", change_tag(&c.kind), c.path);
                 }
             }
             if !r.untracked.is_empty() {
@@ -1726,6 +1748,15 @@ fn print_conflicts(paths: &[String]) {
     eprintln!("CONFLICT ({} paths):", paths.len());
     for p in paths {
         eprintln!("  {p}");
+    }
+}
+
+/// Git-style one-letter status tag for a change kind (A/M/D).
+fn change_tag(k: &ChangeKind) -> &'static str {
+    match k {
+        ChangeKind::Added => "A",
+        ChangeKind::Modified => "M",
+        ChangeKind::Removed => "D",
     }
 }
 

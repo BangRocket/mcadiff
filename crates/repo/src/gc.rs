@@ -170,7 +170,7 @@ mod tests {
         std::fs::write(world.join("staged.bin"), b"staged-only").unwrap();
 
         // stage the file but never commit it
-        crate::index::add_paths(&repo, &world, &["staged.bin".into()]).unwrap();
+        crate::index::add_paths(&repo, &world, &["staged.bin".into()], None).unwrap();
         let idx = crate::index::read(&repo).unwrap().unwrap();
         let staged_id = idx.blobs.get("staged.bin").unwrap().clone();
         assert!(repo.objects().exists(&staged_id));

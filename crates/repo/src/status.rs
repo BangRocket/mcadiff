@@ -91,7 +91,11 @@ fn flatten(m: &Manifest) -> BTreeMap<String, String> {
     out
 }
 
-fn diff(head: &Manifest, cur: &Manifest) -> Vec<Change> {
+/// Classify every path that differs between two manifests as Added (present in
+/// `cur` only), Removed (present in `head` only), or Modified (present in both
+/// with a different content signature). Region signatures fold all chunk ids, so
+/// a single changed chunk marks the region modified. Sorted by path.
+pub(crate) fn diff(head: &Manifest, cur: &Manifest) -> Vec<Change> {
     let h = flatten(head);
     let c = flatten(cur);
     let mut out = Vec::new();
@@ -140,7 +144,7 @@ mod tests {
 
         // stage a modification to tracked.bin
         std::fs::write(world.join("tracked.bin"), b"v2").unwrap();
-        crate::index::add_paths(&repo, &world, &["tracked.bin".into()]).unwrap();
+        crate::index::add_paths(&repo, &world, &["tracked.bin".into()], None).unwrap();
 
         // a second, unstaged modification on top
         std::fs::write(world.join("tracked.bin"), b"v3").unwrap();
@@ -203,7 +207,7 @@ mod tests {
         repo.write_branch("main", &c).unwrap();
 
         std::fs::remove_dir(world.join("emptydir")).unwrap();
-        crate::index::add_paths(&repo, &world, &["emptydir".to_string()]).unwrap();
+        crate::index::add_paths(&repo, &world, &["emptydir".to_string()], None).unwrap();
         let r = status_full(&repo, &world).unwrap();
         assert_eq!(
             r.staged.len(),

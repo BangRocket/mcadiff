@@ -79,6 +79,17 @@ pub fn snapshot_scoped(
     snapshot_inner(repo, world_dir, None, accept)
 }
 
+/// Like [`snapshot_scoped`], reporting per-file progress over the in-scope files
+/// (a sign of life when `add` decodes many chunks).
+pub fn snapshot_scoped_with_progress(
+    repo: &Repository,
+    world_dir: &Path,
+    accept: &dyn Fn(&str) -> bool,
+    progress: Progress,
+) -> Result<Manifest> {
+    snapshot_inner(repo, world_dir, Some(progress), accept)
+}
+
 /// Compute the manifest (and object ids) WITHOUT writing — used by status.
 /// Reads the chunk cache (ids are content-derived either way) but never
 /// persists it: status must not write repo state.

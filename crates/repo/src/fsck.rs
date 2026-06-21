@@ -156,7 +156,7 @@ mod tests {
         std::fs::create_dir_all(&world).unwrap();
         std::fs::write(world.join("staged.bin"), b"staged-only").unwrap();
 
-        crate::index::add_paths(&repo, &world, &["staged.bin".into()]).unwrap();
+        crate::index::add_paths(&repo, &world, &["staged.bin".into()], None).unwrap();
 
         // the staged object exists and is reachable via the index → 0 unreachable
         let r = fsck(&repo).unwrap();

@@ -59,7 +59,9 @@ history for the first bad commit, checking each suspect out into the worktree.
 **Staging index** — `mcagit` now has a git-style staging area:
 
 - `mcagit add <pathspec>...` — stage worktree paths (files, dirs, or `*`/`?` globs, relative
-  to the worktree root; `-A`/`.` for everything) into the index.
+  to the worktree root; `-A`/`.` for everything) into the index. Prints a per-path `A`/`M`/`D`
+  list of what it staged plus a summary (`staged N path(s): X added, Y modified, Z deleted`),
+  and a live `scanning …` progress line on a terminal while chunks are decoded.
 - `mcagit commit -m "<msg>"` — commit the staging index. `commit -a` snapshots the whole
   worktree instead (the old snapshot behavior); set `commit.autoStageAll=true` to make bare
   `commit` do that by default.

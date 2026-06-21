@@ -4,8 +4,9 @@
 
 use crate::manifest::Manifest;
 use crate::repository::Repository;
+use crate::status::Change;
 use crate::{pathspec, snapshot, RepoError, Result};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 fn index_path(repo: &Repository) -> PathBuf {
@@ -56,11 +57,23 @@ pub fn effective(repo: &Repository) -> Result<Manifest> {
 /// Stage the worktree state of every path selected by `specs` (relative to the
 /// worktree root) into the index: update/insert entries for present files and
 /// remove entries for in-scope paths that no longer exist (staged deletions).
-/// Returns the number of index entries that changed vs. before. Errors if the
+/// Returns one [`Change`] per index entry this call touched (Added/Modified/
+/// Removed relative to the index before the call), sorted by path. Errors if the
 /// pathspecs match nothing (no worktree file and no in-scope index entry).
-pub fn add_paths(repo: &Repository, world_dir: &Path, specs: &[String]) -> Result<usize> {
+///
+/// `progress`, when set, is called with `(files done, total in-scope files)` as
+/// the worktree is scanned — a sign of life when many chunks must be decoded.
+pub fn add_paths(
+    repo: &Repository,
+    world_dir: &Path,
+    specs: &[String],
+    progress: Option<snapshot::Progress>,
+) -> Result<Vec<Change>> {
     let accept = |rel: &str| pathspec::matches_any(specs, rel);
-    let partial = snapshot::snapshot_scoped(repo, world_dir, &accept)?;
+    let partial = match progress {
+        Some(p) => snapshot::snapshot_scoped_with_progress(repo, world_dir, &accept, p)?,
+        None => snapshot::snapshot_scoped(repo, world_dir, &accept)?,
+    };
 
     // Paths actually present in the worktree within scope.
     let present: HashSet<String> = partial
@@ -111,29 +124,14 @@ pub fn add_paths(repo: &Repository, world_dir: &Path, specs: &[String]) -> Resul
         )));
     }
 
-    let changed = changed_entry_count(&before, &idx);
+    // What this call changed in the index, classified A/M/D vs. the prior index.
+    let changes = crate::status::diff(&before, &idx);
     if idx == head_tree(repo)? {
         clear(repo)?; // result ≡ HEAD → clean index is the file's absence
-    } else if changed > 0 {
+    } else if !changes.is_empty() {
         write(repo, &idx)?;
     }
-    Ok(changed)
-}
-
-/// Count paths whose manifest entry differs between two manifests — regions by
-/// their full chunk map, nbt/blobs by object id — plus any empty-dir changes.
-fn changed_entry_count(a: &Manifest, b: &Manifest) -> usize {
-    fn count<V: PartialEq>(ma: &BTreeMap<String, V>, mb: &BTreeMap<String, V>) -> usize {
-        let changed = mb.iter().filter(|(k, v)| ma.get(*k) != Some(*v)).count();
-        let removed = ma.keys().filter(|k| !mb.contains_key(*k)).count();
-        changed + removed
-    }
-    let dirs: HashSet<&String> = a.empty_dirs.iter().collect();
-    let dirs_b: HashSet<&String> = b.empty_dirs.iter().collect();
-    count(&a.regions, &b.regions)
-        + count(&a.nbt, &b.nbt)
-        + count(&a.blobs, &b.blobs)
-        + dirs.symmetric_difference(&dirs_b).count()
+    Ok(changes)
 }
 
 #[cfg(test)]
@@ -192,8 +190,8 @@ mod tests {
     fn add_stages_a_single_file() {
         let (d, repo) = repo();
         let w = world(&d);
-        let n = add_paths(&repo, &w, &["a.bin".to_string()]).unwrap();
-        assert_eq!(n, 1);
+        let changes = add_paths(&repo, &w, &["a.bin".to_string()], None).unwrap();
+        assert_eq!(changes.len(), 1);
         let idx = read(&repo).unwrap().unwrap();
         assert!(idx.blobs.contains_key("a.bin"));
         assert!(!idx.blobs.contains_key("c.bin"), "c.bin not staged");
@@ -204,7 +202,7 @@ mod tests {
     fn add_directory_is_recursive() {
         let (d, repo) = repo();
         let w = world(&d);
-        add_paths(&repo, &w, &["sub".to_string()]).unwrap();
+        add_paths(&repo, &w, &["sub".to_string()], None).unwrap();
         let idx = read(&repo).unwrap().unwrap();
         assert!(idx.blobs.contains_key("sub/b.bin"));
         assert!(!idx.blobs.contains_key("a.bin"));
@@ -214,8 +212,8 @@ mod tests {
     fn add_dot_stages_everything() {
         let (d, repo) = repo();
         let w = world(&d);
-        let n = add_paths(&repo, &w, &[".".to_string()]).unwrap();
-        assert_eq!(n, 3);
+        let changes = add_paths(&repo, &w, &[".".to_string()], None).unwrap();
+        assert_eq!(changes.len(), 3);
         let idx = read(&repo).unwrap().unwrap();
         assert_eq!(idx.blobs.len(), 3);
     }
@@ -225,9 +223,9 @@ mod tests {
         let (d, repo) = repo();
         let w = world(&d);
         // stage everything, then delete a file and re-add its directory scope
-        add_paths(&repo, &w, &[".".to_string()]).unwrap();
+        add_paths(&repo, &w, &[".".to_string()], None).unwrap();
         std::fs::remove_file(w.join("a.bin")).unwrap();
-        add_paths(&repo, &w, &["a.bin".to_string()]).unwrap();
+        add_paths(&repo, &w, &["a.bin".to_string()], None).unwrap();
         let idx = read(&repo).unwrap().unwrap();
         assert!(!idx.blobs.contains_key("a.bin"), "deletion staged");
         assert!(idx.blobs.contains_key("c.bin"), "others untouched");
@@ -237,7 +235,7 @@ mod tests {
     fn add_nonmatching_pathspec_errors() {
         let (d, repo) = repo();
         let w = world(&d);
-        let err = add_paths(&repo, &w, &["nope/x.bin".to_string()]).unwrap_err();
+        let err = add_paths(&repo, &w, &["nope/x.bin".to_string()], None).unwrap_err();
         assert!(err.to_string().contains("did not match"), "got: {err}");
     }
 
@@ -245,10 +243,15 @@ mod tests {
     fn add_unchanged_file_returns_zero_changes() {
         let (d, repo) = repo();
         let w = world(&d);
-        assert_eq!(add_paths(&repo, &w, &["a.bin".to_string()]).unwrap(), 1);
+        assert_eq!(
+            add_paths(&repo, &w, &["a.bin".to_string()], None)
+                .unwrap()
+                .len(),
+            1
+        );
         // staging the identical file again changes nothing
-        let n = add_paths(&repo, &w, &["a.bin".to_string()]).unwrap();
-        assert_eq!(n, 0);
+        let changes = add_paths(&repo, &w, &["a.bin".to_string()], None).unwrap();
+        assert!(changes.is_empty());
         assert!(read(&repo).unwrap().unwrap().blobs.contains_key("a.bin"));
     }
 
@@ -265,10 +268,10 @@ mod tests {
         repo.write_branch("main", &c).unwrap();
         // stage v2, then revert the worktree to v1 and re-add
         std::fs::write(world.join("a.bin"), b"v2").unwrap();
-        add_paths(&repo, &world, &["a.bin".to_string()]).unwrap();
+        add_paths(&repo, &world, &["a.bin".to_string()], None).unwrap();
         assert!(read(&repo).unwrap().is_some(), "v2 staged");
         std::fs::write(world.join("a.bin"), b"v1").unwrap();
-        add_paths(&repo, &world, &["a.bin".to_string()]).unwrap();
+        add_paths(&repo, &world, &["a.bin".to_string()], None).unwrap();
         assert!(
             read(&repo).unwrap().is_none(),
             "re-adding HEAD-equal content clears the index"
@@ -280,7 +283,7 @@ mod tests {
         let (d, repo) = repo();
         let w = world(&d);
         std::fs::create_dir(w.join("emptydir")).unwrap();
-        add_paths(&repo, &w, &[".".to_string()]).unwrap();
+        add_paths(&repo, &w, &[".".to_string()], None).unwrap();
         assert!(read(&repo)
             .unwrap()
             .unwrap()
@@ -289,9 +292,9 @@ mod tests {
 
         // remove the empty dir and re-stage just its scope
         std::fs::remove_dir(w.join("emptydir")).unwrap();
-        let n = add_paths(&repo, &w, &["emptydir".to_string()]).unwrap();
+        let changes = add_paths(&repo, &w, &["emptydir".to_string()], None).unwrap();
         assert!(
-            n >= 1,
+            !changes.is_empty(),
             "empty-dir removal must be staged (not silently dropped)"
         );
         assert!(!read(&repo)
@@ -299,5 +302,30 @@ mod tests {
             .unwrap()
             .empty_dirs
             .contains(&"emptydir".to_string()));
+    }
+
+    #[test]
+    fn add_reports_change_kinds_against_head() {
+        use crate::status::ChangeKind;
+        let (d, repo) = repo();
+        let w = world(&d); // a.bin, c.bin, sub/b.bin
+                           // commit the world as HEAD so add classifies against it
+        let m = snapshot::snapshot(&repo, &w).unwrap();
+        let tree = repo.write_manifest(&m).unwrap();
+        let c = repo.create_commit(&tree, vec![], "x", "me", "t").unwrap();
+        repo.write_branch("main", &c).unwrap();
+
+        // modify a.bin, delete c.bin, add a brand-new d.bin
+        std::fs::write(w.join("a.bin"), b"alpha2").unwrap();
+        std::fs::remove_file(w.join("c.bin")).unwrap();
+        std::fs::write(w.join("d.bin"), b"delta").unwrap();
+
+        let changes = add_paths(&repo, &w, &[".".to_string()], None).unwrap();
+        let kind = |p: &str| changes.iter().find(|c| c.path == p).map(|c| c.kind);
+        assert_eq!(kind("a.bin"), Some(ChangeKind::Modified));
+        assert_eq!(kind("c.bin"), Some(ChangeKind::Removed));
+        assert_eq!(kind("d.bin"), Some(ChangeKind::Added));
+        // sub/b.bin was untouched → not reported
+        assert_eq!(kind("sub/b.bin"), None);
     }
 }
