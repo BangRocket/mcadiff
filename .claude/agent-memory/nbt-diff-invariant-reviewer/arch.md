@@ -5,6 +5,37 @@ metadata:
   type: project
 ---
 
+## STATUS: .NET-era, file paths no longer exist (updated 2026-07-01)
+
+The project has since been fully ported to Rust and the .NET tree was deleted (see
+`user.md`). The *event contract and design intent* described below is still believed
+accurate in spirit — the Rust port was validated against this C# implementation during the
+port — but every `.cs` file path is stale. Verified-current Rust equivalents (file paths
+confirmed by direct inspection, not just inference):
+- `NbtComparer.cs` walk → `crates/diff/src/comparer.rs`
+- `NbtChangeSink.cs` → `crates/diff/src/change.rs`
+- `PatchOpSink.cs` (in Patch/) → `crates/patch/src/op_sink.rs`
+- `PatchExtractor.cs` → `crates/patch/src/extract.rs`
+- `PatchApplier.cs` → `crates/patch/src/apply.rs`
+- `PatchModels.cs` → `crates/patch/src/model.rs`
+- `NbtIdentity.cs` → `crates/nbt/src/identity.rs`
+- `NbtPath.cs` → `crates/nbt/src/path.rs` (confirmed: flat iterative segment scan, not
+  recursive-descent — see [[untrusted-recursion-guards]])
+- `NbtJson.cs` → `crates/nbt/src/json.rs` (`to_json`/`from_json`)
+- `NbtCanonical.cs` → `crates/nbt/src/canonical.rs`
+- Binary read/write (not present as a distinct C# concept, fNbt handled it) →
+  `crates/nbt/src/read.rs` / `crates/nbt/src/write.rs`, wrapping `valence_nbt` 0.8.0
+- `WorldDiffer.cs` → `crates/diff/src/world.rs`
+
+**Not yet re-verified this session**: whether the exact five-event contract (Added/Removed/
+Modified/TypeChanged/ArrayChanged) and the "Sink Parity Status" table below still hold
+symmetrically in the Rust `comparer.rs`/`change.rs`/`op_sink.rs` trio — the 2026-07-01 review
+that added this note only touched `crates/nbt/{read,json}.rs` and `crates/patch/model.rs`
+(tests + doc comments, zero comparer/sink changes), so parity was untouched by construction,
+not re-audited from scratch. Next time `crates/diff` or `crates/patch/src/{op_sink,apply}.rs`
+actually changes, redo a full parity pass and replace this whole file with a Rust-native
+version rather than patching around the C# one below.
+
 ## The Load-Bearing Invariant
 
 `NbtComparer.Walk(a, b, sink)` drives a recursive tree walk. It emits exactly five events on IDiffSink:

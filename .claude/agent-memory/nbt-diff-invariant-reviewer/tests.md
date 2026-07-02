@@ -18,14 +18,15 @@ metadata:
 - No NbtCanonical determinism test.
 - No sink parity test (NbtChangeSink vs PatchOpSink driven from same walk).
 
-### Rust test files (as of feat/nbt-valence)
+### Rust test files (as of feat/nbt-valence; updated 2026-07-01 on feat/embedded-layout)
 - crates/nbt/src/canonical.rs — key_order_does_not_affect_canonical_bytes, nested_compounds_are_sorted_too
 - crates/nbt/src/identity.rs — modern_uuid_wins, block_coords, slot_then_id, no_identity_returns_none
 - crates/nbt/src/json.rs — large_long_survives_roundtrip, nested_roundtrips, rejects_multi_key_object, double_survives_file_roundtrip, nonfinite_double_survives, nonfinite_float_survives
-- crates/nbt/src/read.rs — reads_named_compound_with_int, truncated_input_errors
+- crates/nbt/src/read.rs — reads_named_compound_with_int, truncated_input_errors, **absurdly_nested_input_errors_instead_of_overflowing** (pins valence_nbt 0.8.0 MAX_DEPTH=512 binary decode guard), **deep_but_sane_nesting_parses_and_canonicalizes** (100-deep sanity check) — added 2026-07-01, see [[untrusted-recursion-guards]]
 - crates/nbt/src/write.rs — write_then_read_roundtrips, empty_list_roundtrips_as_empty
 - crates/diff/src/comparer.rs — comparer tests (identity list, index list, etc.)
-- Total Rust suite: 25 mca-nbt tests, 86 total (as of feat/nbt-valence)
+- crates/patch/src/model.rs — patch_json_roundtrip, **absurdly_nested_patch_json_errors** (pins serde_json 1.0.150's default 128-level parse recursion cap) — added 2026-07-01, see [[untrusted-recursion-guards]]
+- Total Rust suite: 25 mca-nbt tests, 86 total (as of feat/nbt-valence; +3 recursion-depth pinning tests since)
 
 ## Missing Critical Tests (C# port)
 
