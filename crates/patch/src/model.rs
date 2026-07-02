@@ -127,4 +127,21 @@ mod tests {
         assert!(json.contains("\"version\""));
         assert_eq!(WorldPatch::from_json(&json).unwrap(), p);
     }
+
+    /// A hostile `.mcapatch` whose value is nested absurdly deep must be
+    /// rejected by serde_json's recursion limit (128) at parse time — the
+    /// depth bound that keeps `from_json`'s recursive walk safe. Pins that
+    /// limit so a parser change cannot silently drop it.
+    #[test]
+    fn absurdly_nested_patch_json_errors() {
+        let value = format!("{}0{}", r#"{"a":"#.repeat(200), "}".repeat(200));
+        let doc = format!(
+            r#"{{"version":1,"files":[{{"path":"p","kind":"nbt","status":"modified","ops":[{{"path":"x","value":{value}}}]}}]}}"#
+        );
+        let err = WorldPatch::from_json(&doc).unwrap_err();
+        assert!(
+            err.to_string().contains("recursion"),
+            "expected the recursion limit to reject the patch, got: {err}"
+        );
+    }
 }

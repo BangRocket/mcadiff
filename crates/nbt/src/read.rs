@@ -7,6 +7,10 @@ use crate::{NbtError, Result};
 
 /// Read a complete NBT document: returns the root tag's name and value. The NBT
 /// root is always a compound.
+///
+/// Parsing is recursion-depth-limited (valence_nbt rejects nesting past 512
+/// levels), so hostile input cannot overflow the stack — every recursive walk
+/// downstream (conversion, canonical bytes, comparer) inherits that bound.
 pub fn read(buf: &[u8]) -> Result<(String, NbtValue)> {
     let mut slice = buf;
     let (compound, name) = valence_nbt::from_binary::<String>(&mut slice)
@@ -38,5 +42,44 @@ mod tests {
     #[test]
     fn truncated_input_errors() {
         assert!(read(&[10, 0, 4, b'r']).is_err());
+    }
+
+    /// `depth` nested compounds under an empty-named root: root{a{a{…}}}.
+    fn nested_compounds(depth: usize) -> Vec<u8> {
+        let mut bytes = vec![10, 0, 0]; // compound, empty root name
+        for _ in 0..depth {
+            bytes.extend_from_slice(&[10, 0, 1, b'a']); // child compound "a"
+        }
+        bytes.resize(bytes.len() + depth + 1, 0); // End for every compound
+        bytes
+    }
+
+    /// A hostile document nested past the decoder's recursion cap must be
+    /// rejected with a depth error, not overflow the stack. Pins the
+    /// valence_nbt MAX_DEPTH (512) guard so a parser swap or dependency bump
+    /// cannot silently drop the protection.
+    #[test]
+    fn absurdly_nested_input_errors_instead_of_overflowing() {
+        let err = read(&nested_compounds(600)).unwrap_err();
+        assert!(
+            err.to_string().contains("recursion"),
+            "expected the depth guard to reject the input, got: {err}"
+        );
+    }
+
+    /// Deep-but-legal nesting (far past any real chunk) parses, converts, and
+    /// canonicalizes — the guard must not reject sane worlds.
+    #[test]
+    fn deep_but_sane_nesting_parses_and_canonicalizes() {
+        let (_, v) = read(&nested_compounds(100)).unwrap();
+        let mut cur = &v;
+        let mut walked = 0;
+        while let NbtValue::Compound(m) = cur {
+            let Some(child) = m.get("a") else { break };
+            cur = child;
+            walked += 1;
+        }
+        assert_eq!(walked, 100);
+        assert!(!crate::canonical_bytes(&v).is_empty());
     }
 }

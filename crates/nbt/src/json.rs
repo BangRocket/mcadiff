@@ -43,6 +43,10 @@ pub fn to_json(v: &NbtValue) -> J {
 }
 
 /// Decode a type-tagged JSON value back into NBT.
+///
+/// Recursion here is bounded by the input: untrusted JSON (e.g. a `.mcapatch`)
+/// reaches this as a `serde_json::Value`, and serde_json's parser caps nesting
+/// at 128 levels — deeper documents fail at parse time, before this walk.
 pub fn from_json(j: &J) -> Result<NbtValue> {
     let map = j
         .as_object()
